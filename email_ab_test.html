@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A/B Testi Uygulaması</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+        }
+        .vote-button {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .vote-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15);
+        }
+        .vote-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .disabled-button {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .result-box {
+            background-color: #e2e8f0;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .result-item {
+            flex: 1;
+            min-width: 120px;
+            margin: 10px;
+        }
+        .message-box {
+            background-color: #fff3cd;
+            color: #664d03;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border: 1px solid #ffecb5;
+            display: none; /* Varsayılan olarak gizli */
+            animation: fadeIn 0.5s forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @media (max-width: 480px) {
+            .result-box {
+                flex-direction: column;
+            }
+            .result-item {
+                width: 100%;
+                margin: 5px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Hangi Tasarımı Tercih Edersiniz?</h1>
+        <p class="text-gray-600 mb-8">Lütfen tercih ettiğiniz tasarımı seçerek oy kullanın.</p>
+
+        <div class="flex flex-col md:flex-row justify-center gap-6 mb-8">
+            <!-- Varyasyon A -->
+            <div class="bg-blue-100 p-6 rounded-lg shadow-md flex-1 min-w-[200px]">
+                <h2 class="text-2xl font-semibold text-blue-700 mb-4">Varyasyon A</h2>
+                <p class="text-blue-600 mb-6">Bu tasarımda mavi tonlar ve daha düz bir arayüz kullanılmıştır.</p>
+                <button id="voteA" class="vote-button bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full focus:outline-none focus:ring-4 focus:ring-blue-300">
+                    A'ya Oy Ver
+                </button>
+            </div>
+
+            <!-- Varyasyon B -->
+            <div class="bg-green-100 p-6 rounded-lg shadow-md flex-1 min-w-[200px]">
+                <h2 class="text-2xl font-semibold text-green-700 mb-4">Varyasyon B</h2>
+                <p class="text-green-600 mb-6">Bu tasarımda yeşil tonlar ve daha yumuşak köşeler bulunmaktadır.</p>
+                <button id="voteB" class="vote-button bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-full focus:outline-none focus:ring-4 focus:ring-green-300">
+                    B'ye Oy Ver
+                </button>
+            </div>
+        </div>
+
+        <div id="messageBox" class="message-box"></div>
+
+        <h2 class="text-2xl font-bold text-gray-800 mt-8 mb-4">Güncel Sonuçlar</h2>
+        <div class="result-box">
+            <div class="result-item">
+                <p class="text-gray-700 font-semibold text-lg">Varyasyon A Oyları:</p>
+                <p id="votesA" class="text-4xl font-bold text-blue-600">0</p>
+            </div>
+            <div class="result-item">
+                <p class="text-gray-700 font-semibold text-lg">Varyasyon B Oyları:</p>
+                <p id="votesB" class="text-4xl font-bold text-green-600">0</p>
+            </div>
+            <div class="result-item">
+                <p class="text-gray-700 font-semibold text-lg">Toplam Oy:</p>
+                <p id="totalVotes" class="text-4xl font-bold text-gray-800">0</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-500 mt-4">Kullanıcı ID'niz: <span id="userIdDisplay" class="font-mono text-gray-600">Yükleniyor...</span></p>
+    </div>
+
+    <!-- Firebase SDK'ları -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase yapılandırması - Kendi projenizin bilgileri buraya eklendi.
+        const firebaseConfig = {
+            apiKey: "AIzaSyARqgIwVjnmIGruDTAv3OROTwEKHltfUjw",
+            authDomain: "ab-testi.firebaseapp.com",
+            projectId: "ab-testi",
+            storageBucket: "ab-testi.firebasestorage.app",
+            messagingSenderId: "911041066017",
+            appId: "1:911041066017:web:71e21bdd90743bceca1f60",
+            measurementId: "G-B2SENC1N3L"
+        };
+
+        // Uygulama ID'si global değişkenlerden alınır.
+        // Bu değişkenler Canvas ortamı tarafından sağlanır.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-ab-test-app';
+
+        let app;
+        let db;
+        let auth;
+        let userId = null; // Kullanıcı ID'si
+        let hasVoted = false; // Bu oturumda oy kullanılıp kullanılmadığını takip eder
+
+        // Firestore doküman referansları
+        const votesDocRef = () => doc(db, `artifacts/${appId}/public/data/ab_test_votes`, 'current_votes');
+        const userVotesCollectionRef = (uid) => collection(db, `artifacts/${appId}/users/${uid}/user_ab_votes`);
+
+        // HTML elementleri
+        const voteAButton = document.getElementById('voteA');
+        const voteBButton = document.getElementById('voteB');
+        const votesADisplay = document.getElementById('votesA');
+        const votesBDisplay = document.getElementById('votesB');
+        const totalVotesDisplay = document.getElementById('totalVotes');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+        const messageBox = document.getElementById('messageBox');
+
+        // Mesaj kutusunu gösteren fonksiyon
+        function showMessage(message, type = 'warning') {
+            messageBox.textContent = message;
+            messageBox.className = 'message-box'; // Sınıfları sıfırla
+            if (type === 'success') {
+                messageBox.classList.add('bg-green-100', 'text-green-800', 'border-green-200');
+            } else if (type === 'error') {
+                messageBox.classList.add('bg-red-100', 'text-red-800', 'border-red-200');
+            } else { // warning
+                messageBox.classList.add('bg-yellow-100', 'text-yellow-800', 'border-yellow-200');
+            }
+            messageBox.style.display = 'block';
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, 5000); // 5 saniye sonra gizle
+        }
+
+        // Oy butonlarını devre dışı bırakma/etkinleştirme
+        function setVoteButtonsDisabled(disabled) {
+            voteAButton.disabled = disabled;
+            voteBButton.disabled = disabled;
+            if (disabled) {
+                voteAButton.classList.add('disabled-button');
+                voteBButton.classList.add('disabled-button');
+            } else {
+                voteAButton.classList.remove('disabled-button');
+                voteBButton.classList.remove('disabled-button');
+            }
+        }
+
+        // Firebase başlatma ve kimlik doğrulama
+        async function initializeFirebase() {
+            try {
+                // Firebase yapılandırması eksikse hata mesajı göster
+                if (!firebaseConfig.apiKey) {
+                    showMessage("Firebase yapılandırması eksik. Uygulama düzgün çalışmayabilir.", "error");
+                    return;
+                }
+                // Hata ayıklama için Firebase Config'i konsola yazdır
+                console.log("Firebase Config:", firebaseConfig);
+
+                app = initializeApp(firebaseConfig); // Firebase uygulamasını başlat
+                db = getFirestore(app); // Firestore servisini al
+                auth = getAuth(app); // Kimlik doğrulama servisini al
+
+                // Kullanıcı kimlik doğrulama durumu değiştiğinde
+                onAuthStateChanged(auth, async (user) => {
+                    // Hata ayıklama için kimlik doğrulama durumunu konsola yazdır
+                    console.log("Kimlik Doğrulama Durumu Değişti:", user);
+                    if (user) {
+                        userId = user.uid; // Kullanıcı ID'sini al
+                        userIdDisplay.textContent = userId; // Kullanıcı ID'sini ekranda göster
+                        await checkUserVoteStatus(); // Kullanıcının daha önce oy kullanıp kullanmadığını kontrol et
+                        setupRealtimeVotesListener(); // Oy dinleyicisini başlat
+                    } else {
+                        // Her zaman anonim giriş yap
+                        console.log("Kullanıcı bulunamadı, anonim olarak giriş yapılıyor...");
+                        await signInAnonymously(auth);
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase başlatılırken hata oluştu:", error);
+                showMessage("Uygulama başlatılırken bir hata oluştu.", "error");
+            }
+        }
+
+        // Kullanıcının daha önce oy kullanıp kullanmadığını kontrol et
+        async function checkUserVoteStatus() {
+            if (!userId) return; // Kullanıcı ID'si yoksa çık
+            try {
+                // Kullanıcının oy durumu dokümanını al
+                const userVoteDoc = doc(userVotesCollectionRef(userId), 'voted_status');
+                const docSnap = await getDoc(userVoteDoc);
+                if (docSnap.exists() && docSnap.data().voted === true) {
+                    hasVoted = true; // Oy kullanıldı olarak işaretle
+                    setVoteButtonsDisabled(true); // Butonları devre dışı bırak
+                    showMessage("Daha önce oy kullandınız. Teşekkür ederiz!", "success");
+                } else {
+                    hasVoted = false; // Oy kullanılmadı olarak işaretle
+                    setVoteButtonsDisabled(false); // Butonları etkinleştir
+                }
+            } catch (error) {
+                console.error("Kullanıcı oy durumu kontrol edilirken hata:", error);
+                showMessage("Oy durumu kontrol edilirken bir sorun oluştu.", "error");
+            }
+        }
+
+        // Firestore'dan oyları gerçek zamanlı dinleme
+        function setupRealtimeVotesListener() {
+            if (!db) return; // Firestore objesi yoksa çık
+            onSnapshot(votesDocRef(), (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    const votesA = data.votesA || 0;
+                    const votesB = data.votesB || 0;
+                    const total = votesA + votesB;
+                    votesADisplay.textContent = votesA;
+                    votesBDisplay.textContent = votesB;
+                    totalVotesDisplay.textContent = total;
+                } else {
+                    // Doküman yoksa, sıfırla
+                    votesADisplay.textContent = '0';
+                    votesBDisplay.textContent = '0';
+                    totalVotesDisplay.textContent = '0';
+                    console.log("Oy dokümanı henüz yok, sıfır olarak başlatılıyor.");
+                }
+            }, (error) => {
+                console.error("Gerçek zamanlı oy dinlenirken hata:", error);
+                showMessage("Oy sonuçları yüklenirken bir sorun oluştu.", "error");
+            });
+        }
+
+        // Oy verme fonksiyonu
+        async function vote(option) {
+            if (hasVoted) {
+                showMessage("Daha önce oy kullandınız. Sadece bir kez oy verebilirsiniz.", "warning");
+                return;
+            }
+            if (!userId) {
+                showMessage("Kullanıcı kimliği belirlenmedi. Lütfen sayfayı yenileyin.", "error");
+                return;
+            }
+
+            setVoteButtonsDisabled(true); // Oy butonlarını geçici olarak devre dışı bırak
+            console.log(`Oy verme işlemi başlatıldı: ${option} için.`); // Hata ayıklama
+
+            try {
+                // Kullanıcının oy kullandığını Firestore'a kaydet
+                const userVoteDoc = doc(userVotesCollectionRef(userId), 'voted_status');
+                console.log(`Kullanıcı oy durumu kaydediliyor: userId=${userId}`); // Hata ayıklama
+                await setDoc(userVoteDoc, { voted: true, timestamp: new Date() });
+                hasVoted = true; // Oturum için oy kullanıldı olarak işaretle
+                console.log("Kullanıcı oy durumu başarıyla kaydedildi."); // Hata ayıklama
+
+                // Oy sayısını güncelle
+                const currentVotesDoc = votesDocRef();
+                const docSnap = await getDoc(currentVotesDoc);
+
+                let votesA = 0;
+                let votesB = 0;
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    votesA = data.votesA || 0;
+                    votesB = data.votesB || 0;
+                    console.log("Mevcut oylar (Firestore'dan):", data); // Hata ayıklama
+                } else {
+                    console.log("Oy dokümanı henüz yok, yeni oluşturulacak."); // Hata ayıklama
+                }
+
+                if (option === 'A') {
+                    votesA++;
+                } else {
+                    votesB++;
+                }
+
+                console.log(`Güncellenmiş oylar kaydediliyor: A=${votesA}, B=${votesB}`); // Hata ayıklama
+                // Firestore'a güncel oy sayılarını kaydet
+                await setDoc(currentVotesDoc, { votesA, votesB }, { merge: true });
+                showMessage(`Varyasyon ${option} için oyunuz kaydedildi!`, "success");
+                console.log("Oy sayıları başarıyla güncellendi."); // Hata ayıklama
+
+            } catch (error) {
+                console.error("Oy kaydedilirken hata oluştu:", error);
+                showMessage("Oyunuzu kaydederken bir sorun oluştu. Lütfen tekrar deneyin.", "error");
+                hasVoted = false; // Hata durumunda tekrar oy vermeye izin ver
+                setVoteButtonsDisabled(false); // Hata durumunda butonları tekrar etkinleştir
+            }
+        }
+
+        // Butonlara olay dinleyicileri ekle
+        voteAButton.addEventListener('click', () => vote('A'));
+        voteBButton.addEventListener('click', () => vote('B'));
+
+        // Sayfa yüklendiğinde Firebase'i başlat
+        window.onload = initializeFirebase;
+    </script>
+</body>
+</html>
